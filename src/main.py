@@ -3,6 +3,9 @@ import numpy as np
 import threading
 import time
 import mouse
+import os
+import pyautogui
+import winsound
 
 from utils.hand_detector import HandDetector
 from utils.button import TextButton
@@ -26,16 +29,27 @@ def main():
     l_delay = 0 
     r_delay = 0
 
+    # Screenshot gesture state
+    SCREENSHOT_IDLE = 0
+    SCREENSHOT_FIST = 1
+    SCREENSHOT_OPEN = 23
+
+    screenshot_state = SCREENSHOT_IDLE
+    screenshot_timer = 0
+    SCREENSHOT_TIMEOUT = 2.0
+    SCREENSHOT_COOLDOWN = 3.0
+    last_screenshot_time = 0
+
+    os.makedirs("screenshots", exist_ok=True)
+
     def l_clk_delay():
-        nonlocal l_delay
-        nonlocal l_clk_thread
+        nonlocal l_delay, l_clk_thread
         time.sleep(1) # Delay for the mouse to move
         l_delay = 0
         l_clk_thread = threading.Thread(target=l_clk_delay)
 
     def r_clk_delay():
-        nonlocal r_delay
-        nonlocal r_clk_thread
+        nonlocal r_delay, r_clk_thread
         time.sleep(1) # Delay for the mouse to move
         r_delay = 0
         r_clk_thread = threading.Thread(target=r_clk_delay)
@@ -51,13 +65,30 @@ def main():
         TextButton("Right Click", 200, 45),
         TextButton("Double Click", 390, 45),
         TextButton("Scroll Up", 10, 85),
-        TextButton("Scroll Down", 200, 85)
+        TextButton("Scroll Down", 200, 85),
+        TextButton("Screenshot", 390, 85)
     ]
 
     def reset_buttons():
         for button in buttons:
             if button.active_until == 0:  # Only reset if not in timed active state
                 button.is_active = False
+
+    def is_fist(fingers):
+        return fingers == [1, 0, 0, 0, 0]
+    
+    def is_open_palm(fingers):
+        return fingers == [0, 1, 1, 1, 1]
+    
+    def play_screenshot_sound():
+        winsound.Beep(1200, 150)
+
+    flash_until = 0
+    FLASH_DURATION = 0.15
+
+    def flash_feedback(img):
+        flash = np.full_like(img, 255)
+        return cv2.addWeighted(img, 0.3, flash, 0.7, 0)
 
     try:
         while True:
@@ -81,11 +112,38 @@ def main():
 
                 cv2.circle(img, (ind_x, ind_y), 10, (0, 255, 0), cv2.FILLED)
                 fingers = detector.fingersUp(hands[0])
-                
+
+                current_time = time.time()
+                if current_time - last_screenshot_time > SCREENSHOT_COOLDOWN:
+                    if screenshot_state == SCREENSHOT_IDLE:
+                        if is_fist(fingers):
+                            screenshot_state = SCREENSHOT_FIST
+                            screenshot_timer = current_time
+
+                    elif screenshot_state == SCREENSHOT_FIST:
+                        if current_time - screenshot_timer > SCREENSHOT_TIMEOUT:
+                            screenshot_state = SCREENSHOT_IDLE
+                        elif is_open_palm(fingers):
+                            screenshot_state = SCREENSHOT_OPEN
+
+                    elif screenshot_state == SCREENSHOT_OPEN:
+                        if current_time - screenshot_timer > SCREENSHOT_TIMEOUT:
+                            screenshot_state = SCREENSHOT_IDLE
+                        elif is_fist(fingers):
+                            filename = f"screenshots/screenshot_{int(time.time())}.png"
+                            screenshot = pyautogui.screenshot()
+                            screenshot.save(filename)
+                            play_screenshot_sound()
+                            img = flash_feedback(img)
+                            buttons[7].set_active(1.0)
+                            print(f"Screenshot saved: {filename}")
+                            last_screenshot_time = current_time
+                            screenshot_state = SCREENSHOT_IDLE
+
                 # Reset moving and lock buttons
                 buttons[0].is_active = False
                 buttons[1].is_active = False
-                
+                # fingers [thumb, index, middle, ring, pinky]
                 # Mouse Movement
                 if fingers[1] == 1 and fingers[2] == 0 and fingers[0] == 1:
                     buttons[0].is_active = True  # Mouse Moving - instant state
@@ -139,7 +197,7 @@ def main():
             #Camera Feed
             cv2.imshow("AI Mouse - Camera Feed", img)
             key = cv2.waitKey(1)
-            if key & 0xFF == ord('q') or key & 0xFF == 27:
+            if key & 0xFF in [27, ord('q')]:
                 break
 
     finally:

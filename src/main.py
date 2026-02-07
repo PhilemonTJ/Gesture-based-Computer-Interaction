@@ -22,6 +22,9 @@ def main():
     screen_width, screen_height = pyautogui.size()
 
     frameR = 120  # Increased Frame Reduction for better edge handling
+    rect_height = 240
+    rect_x1, rect_y1 = 120, 20
+    rect_x2, rect_y2 = cam_width - rect_x1, rect_height + rect_y1
 
     # Mouse smoothing variables
     smoothening = 5
@@ -106,7 +109,7 @@ def main():
             # Reset all buttons to default state
             reset_buttons()
             
-            cv2.rectangle(img, (frameR, frameR), (cam_width - frameR, cam_height - frameR), (255, 0, 0), 2)
+            cv2.rectangle(img, (rect_x1, rect_y1), (rect_x2, rect_y2), (255, 0, 0), 2)
 
             if hands:
                 lmlist = hands[0]["lmList"]
@@ -150,8 +153,8 @@ def main():
                 # Mouse Movement
                 if fingers[1] == 1 and fingers[2] == 0 and fingers[0] == 1:
                     buttons[0].is_active = True  # Mouse Moving - instant state
-                    converted_x = np.interp(ind_x, [frameR, cam_width - frameR], [0, screen_width])
-                    converted_y = np.interp(ind_y, [frameR, cam_height - frameR], [0, screen_height])
+                    converted_x = np.interp(ind_x, [rect_x1, rect_x2], [0, screen_width])
+                    converted_y = np.interp(ind_y, [rect_y1, rect_y2], [0, screen_height])
                     
                     curr_x = prev_x + (converted_x - prev_x) / smoothening
                     curr_y = prev_y + (converted_y - prev_y) / smoothening

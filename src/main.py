@@ -14,9 +14,10 @@ def main():
     detector = HandDetector(detectionCon=0.9, maxHands=1)
 
     cap = cv2.VideoCapture(0)
-    cam_width, cam_height = 640, 480
-    cap.set(3, cam_width)
-    cap.set(4, cam_height)
+    cam_width, cam_height, cam_fps = 640, 480, 30
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, cam_width)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, cam_height)
+    cap.set(cv2.CAP_PROP_FPS, cam_fps)
 
     screen_width, screen_height = pyautogui.size()
 
@@ -60,8 +61,7 @@ def main():
     r_clk_thread = threading.Thread(target=r_clk_delay)
 
     # Create buttons
-    rect_bottom = cam_height - frameR - 10
-    button_start_y = rect_bottom + 15
+    button_start_y = cam_height - frameR + 5
     button_gap_y = 40
 
     buttons = [

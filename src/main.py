@@ -18,6 +18,8 @@ def main():
     cap.set(3, cam_width)
     cap.set(4, cam_height)
 
+    screen_width, screen_height = pyautogui.size()
+
     frameR = 120  # Increased Frame Reduction for better edge handling
 
     # Mouse smoothing variables
@@ -58,15 +60,19 @@ def main():
     r_clk_thread = threading.Thread(target=r_clk_delay)
 
     # Create buttons
+    rect_bottom = cam_height - frameR - 10
+    button_start_y = rect_bottom + 15
+    button_gap_y = 40
+
     buttons = [
-        TextButton("Mouse Moving", 10, 5),
-        TextButton("Mouse Lock", 200, 5),
-        TextButton("Left Click", 10, 45),
-        TextButton("Right Click", 200, 45),
-        TextButton("Double Click", 390, 45),
-        TextButton("Scroll Up", 10, 85),
-        TextButton("Scroll Down", 200, 85),
-        TextButton("Screenshot", 390, 85)
+        TextButton("Mouse Moving", 10, button_start_y),
+        TextButton("Mouse Lock", 200, button_start_y),
+        TextButton("Left Click", 10, button_start_y + button_gap_y),
+        TextButton("Right Click", 200, button_start_y + button_gap_y),
+        TextButton("Double Click", 390, button_start_y + button_gap_y),
+        TextButton("Scroll Up", 10, button_start_y + 2 * button_gap_y),
+        TextButton("Scroll Down", 200, button_start_y + 2 * button_gap_y),
+        TextButton("Screenshot", 390, button_start_y + 2 * button_gap_y)
     ]
 
     def reset_buttons():
@@ -82,9 +88,6 @@ def main():
     
     def play_screenshot_sound():
         winsound.Beep(1200, 150)
-
-    flash_until = 0
-    FLASH_DURATION = 0.15
 
     def flash_feedback(img):
         flash = np.full_like(img, 255)
@@ -147,14 +150,14 @@ def main():
                 # Mouse Movement
                 if fingers[1] == 1 and fingers[2] == 0 and fingers[0] == 1:
                     buttons[0].is_active = True  # Mouse Moving - instant state
-                    converted_x = np.interp(ind_x, [frameR, cam_width - frameR], [0, 1536])
-                    converted_y = np.interp(ind_y, [frameR, cam_height - frameR], [0, 864])
+                    converted_x = np.interp(ind_x, [frameR, cam_width - frameR], [0, screen_width])
+                    converted_y = np.interp(ind_y, [frameR, cam_height - frameR], [0, screen_height])
                     
                     curr_x = prev_x + (converted_x - prev_x) / smoothening
                     curr_y = prev_y + (converted_y - prev_y) / smoothening
                     
-                    curr_x = max(0, min(curr_x, 1536))
-                    curr_y = max(0, min(curr_y, 864))
+                    curr_x = max(0, min(curr_x, screen_width))
+                    curr_y = max(0, min(curr_y, screen_height))
                     
                     mouse.move(int(curr_x), int(curr_y))
                     prev_x, prev_y = curr_x, curr_y

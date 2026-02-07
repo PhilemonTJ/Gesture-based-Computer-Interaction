@@ -3,6 +3,9 @@ import numpy as np
 import threading
 import time
 import mouse
+import os
+import pyautogui
+import winsound
 
 from utils.hand_detector import HandDetector
 from utils.button import TextButton
@@ -11,11 +14,17 @@ def main():
     detector = HandDetector(detectionCon=0.9, maxHands=1)
 
     cap = cv2.VideoCapture(0)
-    cam_width, cam_height = 640, 480
-    cap.set(3, cam_width)
-    cap.set(4, cam_height)
+    cam_width, cam_height, cam_fps = 640, 480, 30
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, cam_width)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, cam_height)
+    cap.set(cv2.CAP_PROP_FPS, cam_fps)
+
+    screen_width, screen_height = pyautogui.size()
 
     frameR = 120  # Increased Frame Reduction for better edge handling
+    rect_height = 240
+    rect_x1, rect_y1 = 120, 20
+    rect_x2, rect_y2 = cam_width - rect_x1, rect_height + rect_y1
 
     # Mouse smoothing variables
     smoothening = 5
@@ -26,16 +35,27 @@ def main():
     l_delay = 0 
     r_delay = 0
 
+    # Screenshot gesture state
+    SCREENSHOT_IDLE = 0
+    SCREENSHOT_FIST = 1
+    SCREENSHOT_OPEN = 23
+
+    screenshot_state = SCREENSHOT_IDLE
+    screenshot_timer = 0
+    SCREENSHOT_TIMEOUT = 2.0
+    SCREENSHOT_COOLDOWN = 3.0
+    last_screenshot_time = 0
+
+    os.makedirs("screenshots", exist_ok=True)
+
     def l_clk_delay():
-        nonlocal l_delay
-        nonlocal l_clk_thread
+        nonlocal l_delay, l_clk_thread
         time.sleep(1) # Delay for the mouse to move
         l_delay = 0
         l_clk_thread = threading.Thread(target=l_clk_delay)
 
     def r_clk_delay():
-        nonlocal r_delay
-        nonlocal r_clk_thread
+        nonlocal r_delay, r_clk_thread
         time.sleep(1) # Delay for the mouse to move
         r_delay = 0
         r_clk_thread = threading.Thread(target=r_clk_delay)
@@ -44,20 +64,37 @@ def main():
     r_clk_thread = threading.Thread(target=r_clk_delay)
 
     # Create buttons
+    button_start_y = cam_height - frameR + 5
+    button_gap_y = 40
+
     buttons = [
-        TextButton("Mouse Moving", 10, 5),
-        TextButton("Mouse Lock", 200, 5),
-        TextButton("Left Click", 10, 45),
-        TextButton("Right Click", 200, 45),
-        TextButton("Double Click", 390, 45),
-        TextButton("Scroll Up", 10, 85),
-        TextButton("Scroll Down", 200, 85)
+        TextButton("Mouse Moving", 10, button_start_y),
+        TextButton("Mouse Lock", 200, button_start_y),
+        TextButton("Left Click", 10, button_start_y + button_gap_y),
+        TextButton("Right Click", 200, button_start_y + button_gap_y),
+        TextButton("Double Click", 390, button_start_y + button_gap_y),
+        TextButton("Scroll Up", 10, button_start_y + 2 * button_gap_y),
+        TextButton("Scroll Down", 200, button_start_y + 2 * button_gap_y),
+        TextButton("Screenshot", 390, button_start_y + 2 * button_gap_y)
     ]
 
     def reset_buttons():
         for button in buttons:
             if button.active_until == 0:  # Only reset if not in timed active state
                 button.is_active = False
+
+    def is_fist(fingers):
+        return fingers == [1, 0, 0, 0, 0]
+    
+    def is_open_palm(fingers):
+        return fingers == [0, 1, 1, 1, 1]
+    
+    def play_screenshot_sound():
+        winsound.Beep(1200, 150)
+
+    def flash_feedback(img):
+        flash = np.full_like(img, 255)
+        return cv2.addWeighted(img, 0.3, flash, 0.7, 0)
 
     try:
         while True:
@@ -72,7 +109,7 @@ def main():
             # Reset all buttons to default state
             reset_buttons()
             
-            cv2.rectangle(img, (frameR, frameR), (cam_width - frameR, cam_height - frameR), (255, 0, 0), 2)
+            cv2.rectangle(img, (rect_x1, rect_y1), (rect_x2, rect_y2), (255, 0, 0), 2)
 
             if hands:
                 lmlist = hands[0]["lmList"]
@@ -81,22 +118,49 @@ def main():
 
                 cv2.circle(img, (ind_x, ind_y), 10, (0, 255, 0), cv2.FILLED)
                 fingers = detector.fingersUp(hands[0])
-                
+
+                current_time = time.time()
+                if current_time - last_screenshot_time > SCREENSHOT_COOLDOWN:
+                    if screenshot_state == SCREENSHOT_IDLE:
+                        if is_fist(fingers):
+                            screenshot_state = SCREENSHOT_FIST
+                            screenshot_timer = current_time
+
+                    elif screenshot_state == SCREENSHOT_FIST:
+                        if current_time - screenshot_timer > SCREENSHOT_TIMEOUT:
+                            screenshot_state = SCREENSHOT_IDLE
+                        elif is_open_palm(fingers):
+                            screenshot_state = SCREENSHOT_OPEN
+
+                    elif screenshot_state == SCREENSHOT_OPEN:
+                        if current_time - screenshot_timer > SCREENSHOT_TIMEOUT:
+                            screenshot_state = SCREENSHOT_IDLE
+                        elif is_fist(fingers):
+                            filename = f"screenshots/screenshot_{int(time.time())}.png"
+                            screenshot = pyautogui.screenshot()
+                            screenshot.save(filename)
+                            play_screenshot_sound()
+                            img = flash_feedback(img)
+                            buttons[7].set_active(1.0)
+                            print(f"Screenshot saved: {filename}")
+                            last_screenshot_time = current_time
+                            screenshot_state = SCREENSHOT_IDLE
+
                 # Reset moving and lock buttons
                 buttons[0].is_active = False
                 buttons[1].is_active = False
-                
+                # fingers [thumb, index, middle, ring, pinky]
                 # Mouse Movement
                 if fingers[1] == 1 and fingers[2] == 0 and fingers[0] == 1:
                     buttons[0].is_active = True  # Mouse Moving - instant state
-                    converted_x = np.interp(ind_x, [frameR, cam_width - frameR], [0, 1536])
-                    converted_y = np.interp(ind_y, [frameR, cam_height - frameR], [0, 864])
+                    converted_x = np.interp(ind_x, [rect_x1, rect_x2], [0, screen_width])
+                    converted_y = np.interp(ind_y, [rect_y1, rect_y2], [0, screen_height])
                     
                     curr_x = prev_x + (converted_x - prev_x) / smoothening
                     curr_y = prev_y + (converted_y - prev_y) / smoothening
                     
-                    curr_x = max(0, min(curr_x, 1536))
-                    curr_y = max(0, min(curr_y, 864))
+                    curr_x = max(0, min(curr_x, screen_width))
+                    curr_y = max(0, min(curr_y, screen_height))
                     
                     mouse.move(int(curr_x), int(curr_y))
                     prev_x, prev_y = curr_x, curr_y
@@ -139,7 +203,7 @@ def main():
             #Camera Feed
             cv2.imshow("AI Mouse - Camera Feed", img)
             key = cv2.waitKey(1)
-            if key & 0xFF == ord('q') or key & 0xFF == 27:
+            if key & 0xFF in [27, ord('q')]:
                 break
 
     finally:

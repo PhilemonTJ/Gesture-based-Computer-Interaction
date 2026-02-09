@@ -21,7 +21,7 @@ def main():
 
     screen_width, screen_height = pyautogui.size()
 
-    frameR = 120  # Increased Frame Reduction for better edge handling
+    frameButtons = 160  # Increased Frame Reduction for better edge handling
     rect_height = 240
     rect_x1, rect_y1 = 120, 20
     rect_x2, rect_y2 = cam_width - rect_x1, rect_height + rect_y1
@@ -48,6 +48,9 @@ def main():
 
     os.makedirs("screenshots", exist_ok=True)
 
+    # Drag state
+    dragging = False
+
     def l_clk_delay():
         nonlocal l_delay, l_clk_thread
         time.sleep(1) # Delay for the mouse to move
@@ -64,7 +67,7 @@ def main():
     r_clk_thread = threading.Thread(target=r_clk_delay)
 
     # Create buttons
-    button_start_y = cam_height - frameR + 5
+    button_start_y = cam_height - frameButtons + 5
     button_gap_y = 40
 
     buttons = [
@@ -75,7 +78,8 @@ def main():
         TextButton("Double Click", 390, button_start_y + button_gap_y),
         TextButton("Scroll Up", 10, button_start_y + 2 * button_gap_y),
         TextButton("Scroll Down", 200, button_start_y + 2 * button_gap_y),
-        TextButton("Screenshot", 390, button_start_y + 2 * button_gap_y)
+        TextButton("Screenshot", 10, button_start_y + 3 * button_gap_y),
+        TextButton("Drag & Drop", 200, button_start_y + 3 * button_gap_y),
     ]
 
     def reset_buttons():
@@ -113,6 +117,7 @@ def main():
 
             if hands:
                 lmlist = hands[0]["lmList"]
+                thumb_x, thumb_y = lmlist[4][0], lmlist[4][1]
                 ind_x, ind_y = lmlist[8][0], lmlist[8][1]
                 mid_x, mid_y = lmlist[12][0], lmlist[12][1]
 
@@ -149,9 +154,23 @@ def main():
                 # Reset moving and lock buttons
                 buttons[0].is_active = False
                 buttons[1].is_active = False
+                buttons[8].is_active = False
+
+                drag_length, _, _ = detector.findDistance((thumb_x, thumb_y), (ind_x, ind_y), img)
+
+                if drag_length < 40:
+                    if not dragging:
+                        mouse.press(button='left')
+                        dragging = True
+                    buttons[8].is_active = True
+                else:
+                    if dragging:
+                        mouse.release(button='left')
+                        dragging = False
+                    buttons[8].is_active = False
                 # fingers [thumb, index, middle, ring, pinky]
                 # Mouse Movement
-                if fingers[1] == 1 and fingers[2] == 0 and fingers[0] == 1:
+                if ((fingers[1] == 1 and fingers[2] == 0 and fingers[0] == 1) or dragging):
                     buttons[0].is_active = True  # Mouse Moving - instant state
                     converted_x = np.interp(ind_x, [rect_x1, rect_x2], [0, screen_width])
                     converted_y = np.interp(ind_y, [rect_y1, rect_y2], [0, screen_height])

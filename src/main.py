@@ -9,6 +9,7 @@ import winsound
 
 from utils.hand_detector import HandDetector
 from utils.button import TextButton
+from utils.volume_manager import VolumeManager
 
 def main():
     detector = HandDetector(detectionCon=0.9, maxHands=1)
@@ -21,7 +22,7 @@ def main():
 
     screen_width, screen_height = pyautogui.size()
 
-    frameButtons = 160  # Increased Frame Reduction for better edge handling
+    frameButtons = 180  # Increased Frame Reduction for better edge handling
     rect_height = 240
     rect_x1, rect_y1 = 120, 20
     rect_x2, rect_y2 = cam_width - rect_x1, rect_height + rect_y1
@@ -51,6 +52,14 @@ def main():
     # Drag state
     dragging = False
 
+    # Knob-style volume control state
+    volume_manager = VolumeManager(step=10)
+    prev_knob_angle = None
+    KNOB_THRESHOLD = 3.0        # degrees
+    KNOB_COOLDOWN = 0.15        # seconds
+    last_knob_time = 0
+    
+
     def l_clk_delay():
         nonlocal l_delay, l_clk_thread
         time.sleep(1) # Delay for the mouse to move
@@ -68,7 +77,7 @@ def main():
 
     # Create buttons
     button_start_y = cam_height - frameButtons + 5
-    button_gap_y = 40
+    button_gap_y = 35
 
     buttons = [
         TextButton("Mouse Moving", 10, button_start_y),
@@ -80,6 +89,8 @@ def main():
         TextButton("Scroll Down", 200, button_start_y + 2 * button_gap_y),
         TextButton("Screenshot", 10, button_start_y + 3 * button_gap_y),
         TextButton("Drag & Drop", 200, button_start_y + 3 * button_gap_y),
+        TextButton("Volume Up", 10, button_start_y + 4 * button_gap_y),
+        TextButton("Volume Down", 200, button_start_y + 4 * button_gap_y),
     ]
 
     def reset_buttons():
@@ -155,6 +166,42 @@ def main():
                 buttons[0].is_active = False
                 buttons[1].is_active = False
                 buttons[8].is_active = False
+
+                # Knob-style Volume Control
+                if fingers == [0, 1, 1, 1, 1]:
+                    index_joint = (lmlist[6][0], lmlist[6][1])  # PIP joint
+                    index_tip = (lmlist[8][0], lmlist[8][1])    # tip
+
+                    curr_angle = detector.finger_angle(index_tip, index_joint)
+
+                    if prev_knob_angle is not None:
+                        delta = curr_angle - prev_knob_angle
+
+                        # Normalize angle wraparound
+                        if delta > 180:
+                            delta -= 360
+                        elif delta < -180:
+                            delta += 360
+
+                        now = time.time()
+                        if abs(delta) > KNOB_THRESHOLD and (now - last_knob_time) > KNOB_COOLDOWN:
+                            if delta > 0:
+                                volume_manager.increase()
+                                buttons[9].set_active()   # Volume Up button
+                            else:
+                                volume_manager.decrease()
+                                buttons[10].set_active()  # Volume Down button
+
+                            last_knob_time = now
+
+                    prev_knob_angle = curr_angle
+
+                    # Visual feedback
+                    cv2.line(img, index_joint, index_tip, (255, 0, 255), 3)
+                    cv2.putText(img, "VOLUME KNOB", (20, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 255),2)
+
+                else:
+                    prev_knob_angle = None
 
                 drag_length, _, _ = detector.findDistance((thumb_x, thumb_y), (ind_x, ind_y), img)
 

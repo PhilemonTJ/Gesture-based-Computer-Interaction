@@ -143,3 +143,27 @@ class HandDetector:
             cv2.circle(img, (cx, cy), scale, color, cv2.FILLED)
 
         return length, info, img
+    
+    @staticmethod
+    def finger_angle(tip, joint):
+        x1, y1 = joint
+        x2, y2 = tip
+        return math.degrees(math.atan2(y2 - y1, x2 - x1))
+    
+    @staticmethod
+    def palm_knob_angle(lmList):
+        """
+        Stable palm-based knob angle using full hand
+        """
+        wrist = lmList[0][:2]
+        index_mcp = lmList[5][:2]
+        pinky_mcp = lmList[17][:2]
+
+        # Palm center
+        cx = (index_mcp[0] + pinky_mcp[0]) / 2
+        cy = (index_mcp[1] + pinky_mcp[1]) / 2
+
+        dx = cx - wrist[0]
+        dy = wrist[1] - cy  # invert Y axis
+
+        return math.degrees(math.atan2(dy, dx))

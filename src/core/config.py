@@ -1,0 +1,16 @@
+# core/config.py
+
+class Config:
+    CAM_WIDTH = 640
+    CAM_HEIGHT = 480
+    CAM_FPS = 30
+
+    FRAME_REDUCTION = 180
+    RECT_HEIGHT = 240
+    SMOOTHENING = 5
+
+    SCREENSHOT_TIMEOUT = 2.0
+    SCREENSHOT_COOLDOWN = 3.0
+
+    KNOB_THRESHOLD = 3.0
+    KNOB_COOLDOWN = 0.15

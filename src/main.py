@@ -105,8 +105,8 @@ def main():
                 img = screenshot.update(fingers, img, buttons[7])
 
                 # ================= VOLUME ================= #
-                index_joint = (lmlist[6][0], lmlist[6][1])
-                angle = detector.finger_angle(index_tip, index_joint)
+                middle_mcp = (lmlist[9][0], lmlist[9][1])
+                angle = detector.finger_angle(middle_tip, middle_mcp)
 
                 volume.update(fingers, angle, buttons)
 
@@ -117,17 +117,27 @@ def main():
                 dragging = drag.update(drag_length, buttons[8])
 
                 # ================= MOVEMENT ================= #
-                movement.update(fingers, index_tip,
-                                dragging, buttons[0])
+                # Distance between index & middle
+                move_length, _, _ = detector.findDistance(
+                    index_tip, middle_tip)
+
+                movement.update(
+                    fingers,
+                    index_tip,
+                    middle_tip,
+                    move_length,
+                    buttons[0],   # Mouse Moving
+                    buttons[1]    # Mouse Lock
+                )
 
                 # ================= CLICK ================= #
                 click_length, _, _ = detector.findDistance(
                     index_tip, middle_tip, img)
 
-                click.update(fingers, click_length, buttons)
+                click.update(lmlist, buttons)
 
                 # ================= SCROLL ================= #
-                scroll.update(fingers, click_length, buttons)
+                scroll.update(fingers, index_tip, buttons)
 
             # ================= DRAW BUTTONS ================= #
             for button in buttons:

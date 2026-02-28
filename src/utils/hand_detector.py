@@ -104,14 +104,14 @@ class HandDetector:
             # Thumb
             if myHandType == "Right":
                 if myLmList[self.tipIds[0]][0] > myLmList[self.tipIds[0] - 1][0]:
-                    fingers.append(1)
-                else:
                     fingers.append(0)
+                else:
+                    fingers.append(1)
             else:
                 if myLmList[self.tipIds[0]][0] < myLmList[self.tipIds[0] - 1][0]:
-                    fingers.append(1)
-                else:
                     fingers.append(0)
+                else:
+                    fingers.append(1)
 
             # 4 Fingers
             for id in range(1, 5):
@@ -145,9 +145,9 @@ class HandDetector:
         return length, info, img
     
     @staticmethod
-    def finger_angle(tip, joint):
-        x1, y1 = joint
-        x2, y2 = tip
+    def finger_angle(lm_point1, lm_point2):
+        x1, y1 = lm_point1
+        x2, y2 = lm_point2
         return math.degrees(math.atan2(y2 - y1, x2 - x1))
     
     @staticmethod

@@ -1,45 +1,49 @@
 # controllers/mouse_click_controller.py
-
 import mouse
-import threading
 import time
 
 class ClickController:
     def __init__(self):
-        self.l_delay = 0
-        self.r_delay = 0
+        self.prev_index_bent = False
+        self.prev_middle_bent = False
 
-        self.l_thread = threading.Thread(target=self.reset_left)
-        self.r_thread = threading.Thread(target=self.reset_right)
+        self.last_index_click_time = 0
+        self.double_click_window = 0.4  # seconds
 
-    def reset_left(self):
-        time.sleep(1)
-        self.l_delay = 0
-        self.l_thread = threading.Thread(target=self.reset_left)
+    def is_index_bent(self, lmList):
+        tip_y = lmList[8][1]
+        pip_y = lmList[7][1]
+        return tip_y > pip_y
 
-    def reset_right(self):
-        time.sleep(1)
-        self.r_delay = 0
-        self.r_thread = threading.Thread(target=self.reset_right)
+    def is_middle_bent(self, lmList):
+        tip_y = lmList[12][1]
+        pip_y = lmList[11][1]
+        return tip_y > pip_y
 
-    def update(self, fingers, length, buttons):
+    def update(self, lmList, buttons):
 
-        if fingers[1] == 1 and fingers[2] == 1 and fingers[0] == 1:
+        index_bent = self.is_index_bent(lmList)
+        middle_bent = self.is_middle_bent(lmList)
 
-            if length < 40:
+        current_time = time.time()
 
-                if fingers[3] == 0 and fingers[4] == 0 and self.l_delay == 0:
-                    buttons[2].set_active()
-                    mouse.click(button='left')
-                    self.l_delay = 1
-                    self.l_thread.start()
+        # ================= LEFT CLICK (Index Bend) =================
+        if index_bent and not self.prev_index_bent:
 
-                elif fingers[3] == 1 and fingers[4] == 0 and self.r_delay == 0:
-                    buttons[3].set_active()
-                    mouse.click(button='right')
-                    self.r_delay = 1
-                    self.r_thread.start()
+            # Check for double click
+            if current_time - self.last_index_click_time < self.double_click_window:
+                mouse.double_click(button='left')
+                buttons[4].set_active()  # Double Click
+                self.last_index_click_time = 0
+            else:
+                mouse.click(button='left')
+                buttons[2].set_active()  # Left Click
+                self.last_index_click_time = current_time
 
-                elif fingers[3] == 0 and fingers[4] == 1:
-                    buttons[4].set_active()
-                    mouse.double_click(button='left')
+        # ================= RIGHT CLICK (Middle Bend) =================
+        if middle_bent and not self.prev_middle_bent:
+            mouse.click(button='right')
+            buttons[3].set_active()
+
+        self.prev_index_bent = index_bent
+        self.prev_middle_bent = middle_bent

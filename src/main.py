@@ -9,6 +9,8 @@ import winsound
 
 from utils.hand_detector import HandDetector
 from utils.button import TextButton
+from utils.filters import OneEuroFilter
+from utils.roi_tracker import RoiTracker
 
 def main():
     detector = HandDetector(detectionCon=0.9, maxHands=1)
@@ -26,10 +28,12 @@ def main():
     rect_x1, rect_y1 = 120, 20
     rect_x2, rect_y2 = cam_width - rect_x1, rect_height + rect_y1
 
-    # Mouse smoothing variables
-    smoothening = 5
-    prev_x, prev_y = 0, 0
-    curr_x, curr_y = 0, 0
+    # OneEuroFilter for cursor smoothing (replaces basic exponential smoothing)
+    filter_x = OneEuroFilter(min_cutoff=1.0, beta=0.007)
+    filter_y = OneEuroFilter(min_cutoff=1.0, beta=0.007)
+
+    # ROI tracker for efficient hand detection
+    roi_tracker = RoiTracker(margin=80, max_lost_frames=5)
 
     # Delay for the mouse to move
     l_delay = 0 
@@ -96,6 +100,9 @@ def main():
         flash = np.full_like(img, 255)
         return cv2.addWeighted(img, 0.3, flash, 0.7, 0)
 
+    # FPS tracking
+    prev_frame_time = 0
+
     try:
         while True:
             success, img = cap.read()
@@ -104,14 +111,39 @@ def main():
                 break
 
             img = cv2.flip(img, 1)
-            hands, img = detector.findHands(img, flipType=False)
-            
+            frame_h, frame_w = img.shape[:2]
+
+            # --- ROI-gated detection ---
+            roi_frame, offset_x, offset_y = roi_tracker.get_frame_region(img)
+            hands, roi_frame = detector.findHands(roi_frame, flipType=False)
+
+            # Convert crop-space landmarks to full-frame space
+            if hands and (offset_x != 0 or offset_y != 0):
+                for hand in hands:
+                    for lm in hand["lmList"]:
+                        lm[0] += offset_x
+                        lm[1] += offset_y
+                    bx, by, bw, bh = hand["bbox"]
+                    hand["bbox"] = (bx + offset_x, by + offset_y, bw, bh)
+                    cx, cy = hand["center"]
+                    hand["center"] = (cx + offset_x, cy + offset_y)
+
+            # Copy ROI detection drawings back onto full frame if cropped
+            if offset_x != 0 or offset_y != 0:
+                img[offset_y:offset_y + roi_frame.shape[0],
+                    offset_x:offset_x + roi_frame.shape[1]] = roi_frame
+
             # Reset all buttons to default state
             reset_buttons()
-            
+
             cv2.rectangle(img, (rect_x1, rect_y1), (rect_x2, rect_y2), (255, 0, 0), 2)
 
             if hands:
+                # Update ROI with raw full-frame landmarks
+                roi_tracker.update_from_landmarks(
+                    hands[0]["lmList"], frame_w, frame_h
+                )
+
                 lmlist = hands[0]["lmList"]
                 ind_x, ind_y = lmlist[8][0], lmlist[8][1]
                 mid_x, mid_y = lmlist[12][0], lmlist[12][1]
@@ -155,15 +187,16 @@ def main():
                     buttons[0].is_active = True  # Mouse Moving - instant state
                     converted_x = np.interp(ind_x, [rect_x1, rect_x2], [0, screen_width])
                     converted_y = np.interp(ind_y, [rect_y1, rect_y2], [0, screen_height])
-                    
-                    curr_x = prev_x + (converted_x - prev_x) / smoothening
-                    curr_y = prev_y + (converted_y - prev_y) / smoothening
-                    
-                    curr_x = max(0, min(curr_x, screen_width))
-                    curr_y = max(0, min(curr_y, screen_height))
-                    
-                    mouse.move(int(curr_x), int(curr_y))
-                    prev_x, prev_y = curr_x, curr_y
+
+                    # OneEuroFilter smoothing (replaces basic exponential)
+                    t = time.time()
+                    smooth_x = filter_x(t, converted_x)
+                    smooth_y = filter_y(t, converted_y)
+
+                    smooth_x = max(0, min(smooth_x, screen_width))
+                    smooth_y = max(0, min(smooth_y, screen_height))
+
+                    mouse.move(int(smooth_x), int(smooth_y))
                 elif fingers[1] == 1 and fingers[2] == 1 and fingers[0] == 1:
                     buttons[1].is_active = True  # Mouse Lock - instant state
                     
@@ -195,7 +228,20 @@ def main():
                         else:
                             buttons[6].set_active()  # Scroll Down
                             mouse.wheel(delta=-1)
-            
+            else:
+                # No hand detected — mark lost for ROI fallback
+                roi_tracker.mark_lost()
+
+            # --- Debug overlay ---
+            roi_tracker.draw_roi(img, color=(0, 255, 0), thickness=2)
+
+            # FPS counter (top-right corner)
+            curr_frame_time = time.time()
+            fps = 1.0 / (curr_frame_time - prev_frame_time) if prev_frame_time else 0
+            prev_frame_time = curr_frame_time
+            cv2.putText(img, f"FPS: {int(fps)}", (cam_width - 140, 30),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+
             # Draw all buttons
             for button in buttons:
                 button.draw(img)

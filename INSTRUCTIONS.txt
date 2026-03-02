@@ -1,0 +1,125 @@
+============================================================
+  GestureX — Gesture Guide
+  Touch-Free Human Computer Interaction System
+============================================================
+
+  Fingers notation:  [Thumb, Index, Middle, Ring, Pinky]
+  1 = finger up/extended,  0 = finger down/curled
+
+
+──────────────────────────────────────────────────────────────
+  1. MOUSE MOVEMENT
+──────────────────────────────────────────────────────────────
+
+  Hand:    Index + Middle fingers UP, thumb DOWN, rest DOWN
+  Fingers: [0, 1, 1, 0, 0]
+
+  • Keep index & middle CLOSE TOGETHER (joined)
+    → Cursor follows the midpoint of both fingertips
+
+  • Spread index & middle APART
+    → Cursor LOCKS in place (stops moving)
+
+
+──────────────────────────────────────────────────────────────
+  2. LEFT CLICK
+──────────────────────────────────────────────────────────────
+
+  Prerequisite:  Be in Movement/Lock mode [0, 1, 1, 0, 0]
+
+  • BEND your INDEX finger down (like pressing a mouse button)
+    then bring it back up
+    → Single left click
+
+  • Do it TWICE quickly (within 0.4 seconds)
+    → Double click
+
+
+──────────────────────────────────────────────────────────────
+  3. RIGHT CLICK
+──────────────────────────────────────────────────────────────
+
+  Prerequisite:  Be in Movement/Lock mode [0, 1, 1, 0, 0]
+
+  • BEND your MIDDLE finger down then bring it back up
+    → Single right click
+
+
+──────────────────────────────────────────────────────────────
+  4. DRAG & DROP
+──────────────────────────────────────────────────────────────
+
+  Hand:    Only INDEX finger UP, middle/ring/pinky DOWN
+  Fingers: [*, 1, 0, 0, 0]  (* = thumb position varies)
+
+  • PINCH your thumb toward your index fingertip (< 40px)
+    → Left mouse button PRESSED (held down)
+    → Cursor follows your index fingertip
+
+  • SPREAD thumb away from index (> 40px)
+    → Left mouse button RELEASED (let go)
+
+  Use this for:
+    - Text selection (pinch on text, drag, release)
+    - File drag-and-drop (pinch on file, drag to folder, release)
+    - Window moving/resizing
+
+
+──────────────────────────────────────────────────────────────
+  5. SCROLL
+──────────────────────────────────────────────────────────────
+
+  Hand:    Thumb + Index + Middle UP, ring + pinky DOWN
+  Fingers: [1, 1, 1, 0, 0]
+
+  • Move hand UP from starting position → Scroll UP
+  • Move hand DOWN from starting position → Scroll DOWN
+  • Scroll speed is proportional to distance from baseline
+  • Baseline resets when you leave scroll mode
+
+
+──────────────────────────────────────────────────────────────
+  6. VOLUME CONTROL
+──────────────────────────────────────────────────────────────
+
+  Hand:    ALL 5 fingers UP (open palm)
+  Fingers: [1, 1, 1, 1, 1]
+
+  • ROTATE hand CLOCKWISE    → Volume UP
+  • ROTATE hand COUNTER-CW   → Volume DOWN
+
+  Works like a knob — rotation is tracked via middle
+  finger angle. Each ~10° of rotation = one volume step.
+
+
+──────────────────────────────────────────────────────────────
+  7. SCREENSHOT
+──────────────────────────────────────────────────────────────
+
+  Three-step sequence (must complete within 2 seconds):
+
+    Step 1:  Make a FIST        [1, 0, 0, 0, 0]
+    Step 2:  OPEN your palm     [0, 1, 1, 1, 1]
+    Step 3:  Make a FIST again  [1, 0, 0, 0, 0]
+
+  → Screenshot saved to src/screenshots/
+  → Beep sound plays + Windows toast notification
+  → 3-second cooldown before next screenshot
+
+
+──────────────────────────────────────────────────────────────
+  QUICK REFERENCE
+──────────────────────────────────────────────────────────────
+
+  [0,1,1,0,0] joined    →  Move cursor
+  [0,1,1,0,0] spread    →  Lock cursor
+  [0,1,1,0,0] + bend I  →  Left click
+  [0,1,1,0,0] + bend M  →  Right click
+  [*,1,0,0,0] + pinch   →  Drag & drop
+  [1,1,1,0,0]           →  Scroll (move up/down)
+  [1,1,1,1,1]           →  Volume (rotate hand)
+  Fist→Open→Fist        →  Screenshot
+
+============================================================
+  Controls:  Press 'Q' or ESC to quit the application
+============================================================

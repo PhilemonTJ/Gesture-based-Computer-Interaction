@@ -6,6 +6,7 @@ import time
 from utils.hand_detector import HandDetector
 from utils.button import TextButton
 from utils.volume_manager import VolumeManager
+from utils.roi_tracker import RoiTracker
 
 from core.config import Config
 from core.camera_manager import CameraManager
@@ -45,6 +46,7 @@ def main():
     drag = DragController(config)
     volume = VolumeController(config, volume_manager)
     screenshot = ScreenshotController(config)
+    roi = RoiTracker(margin=config.ROI_MARGIN, max_lost_frames=config.ROI_MAX_LOST)
 
     # ================= BUTTONS ================= #
 
@@ -84,7 +86,10 @@ def main():
                 break
 
             img = cv2.flip(img, 1)
-            hands, img = detector.findHands(img, flipType=False)
+
+            # ── ROI: crop to hand region for faster detection ──
+            roi_frame, offset_x, offset_y = roi.get_frame_region(img)
+            hands, _ = detector.findHands(roi_frame, flipType=False)
 
             reset_buttons()
 
@@ -95,7 +100,17 @@ def main():
 
             if hands:
 
+                # Offset landmarks from crop coords → full-frame coords
                 lmlist = hands[0]["lmList"]
+                if offset_x != 0 or offset_y != 0:
+                    lmlist = [[lm[0] + offset_x, lm[1] + offset_y] + lm[2:]
+                              for lm in lmlist]
+                    hands[0]["lmList"] = lmlist
+
+                # Update ROI for next frame
+                frame_h, frame_w = img.shape[:2]
+                roi.update_from_landmarks(lmlist, frame_w, frame_h)
+
                 fingers = detector.fingersUp(hands[0])
 
                 thumb_tip = (lmlist[4][0], lmlist[4][1])
@@ -117,7 +132,8 @@ def main():
                     volume.update(fingers, angle, buttons)
 
                     # ===== SCROLL (only acts on [1,1,1,0,0]) ===== #
-                    scroll.update(fingers, index_tip, buttons)
+                    scroll_dist, _, _ = detector.findDistance(index_tip, middle_tip)
+                    scroll.update(fingers, index_tip, buttons, finger_distance=scroll_dist)
 
                 # ===== GESTURE MODE (sticky — survives finger flicker) ===== #
 
@@ -196,11 +212,14 @@ def main():
                 # ── HAND LOST — cleanup ──
                 drag.safe_release(buttons[8])
                 active_mode = "idle"
+                roi.mark_lost()
+
+            # ── Draw ROI debug (green rectangle) ──
+            roi.draw_roi(img)
             # ================= FPS COUNTER ================= #
             curr_time = time.time()
             fps = int(1 / (curr_time - prev_time)) if prev_time else 0
             prev_time = curr_time
-            h = img.shape[0]
             cv2.putText(img, f"FPS: {fps}", (img.shape[1] - 120, 25),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
 

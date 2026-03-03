@@ -11,8 +11,15 @@ class Config:
     RECT_HEIGHT = 240
 
     # ── Mouse movement ──
-    SMOOTHENING = 5
     JOIN_THRESHOLD = 45        # px — below = move, above = lock
+
+    # ── OneEuroFilter (adaptive cursor smoothing) ──
+    FILTER_MIN_CUTOFF = 1.0    # lower = smoother at low speeds
+    FILTER_BETA = 0.007        # higher = more responsive at high speeds
+
+    # ── ROI tracker ──
+    ROI_MARGIN = 80            # px — extra padding around hand bounding box
+    ROI_MAX_LOST = 5           # frames — fallback to full-frame after N lost frames
 
     # ── Click ──
     DOUBLE_CLICK_WINDOW = 0.4  # seconds

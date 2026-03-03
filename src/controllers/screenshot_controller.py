@@ -11,8 +11,7 @@ class ScreenshotController:
 
     def __init__(self, config):
         self.IDLE = 0
-        self.FIST = 1
-        self.OPEN = 2
+        self.OPEN = 1
 
         self.state = self.IDLE
         self.timer = 0
@@ -25,7 +24,7 @@ class ScreenshotController:
         self.fist_frames = 0
         self.open_frames = 0
 
-        self.screenshot_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "screenshots")
+        self.screenshot_dir = os.path.join(os.path.expanduser("~"), "Pictures", "Screenshots")
         os.makedirs(self.screenshot_dir, exist_ok=True)
 
     def is_fist(self, fingers):
@@ -42,7 +41,7 @@ class ScreenshotController:
             from win11toast import toast
             abs_path = os.path.abspath(filepath)
             toast(
-                "Screenshot Captured ✔",
+                "Screenshot Captured.",
                 f"Saved to {os.path.basename(filepath)}",
                 image=abs_path,
                 duration="short",
@@ -72,17 +71,11 @@ class ScreenshotController:
         fist_held = self.fist_frames >= self.debounce
         open_held = self.open_frames >= self.debounce
 
-        # ── State machine (debounced) ──
+        # ── State machine: OPEN PALM → FIST = screenshot ──
         if self.state == self.IDLE:
-            if fist_held:
-                self.state = self.FIST
-                self.timer = current_time
-
-        elif self.state == self.FIST:
-            if current_time - self.timer > self.timeout:
-                self.state = self.IDLE
-            elif open_held:
+            if open_held:
                 self.state = self.OPEN
+                self.timer = current_time
 
         elif self.state == self.OPEN:
             if current_time - self.timer > self.timeout:

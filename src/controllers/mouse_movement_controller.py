@@ -2,24 +2,34 @@
 
 import numpy as np
 import mouse
+import time
+from utils.filters import OneEuroFilter
+
 
 class MovementController:
     def __init__(self, config, rect_bounds, screen_size):
-        self.smoothening = config.SMOOTHENING
         self.rect_x1, self.rect_y1, self.rect_x2, self.rect_y2 = rect_bounds
         self.screen_width, self.screen_height = screen_size
-
-        self.prev_x = 0
-        self.prev_y = 0
 
         # Distance threshold between index & middle
         self.join_threshold = config.JOIN_THRESHOLD
 
+        # Adaptive smoothing filters (one per axis)
+        self.filter_x = OneEuroFilter(
+            min_cutoff=config.FILTER_MIN_CUTOFF,
+            beta=config.FILTER_BETA
+        )
+        self.filter_y = OneEuroFilter(
+            min_cutoff=config.FILTER_MIN_CUTOFF,
+            beta=config.FILTER_BETA
+        )
+
     def move_cursor_to(self, pointer):
         """Move the cursor to follow a point in camera-space.
 
-        Can be called from movement mode or drag mode — any time the
-        cursor needs to track a hand position.
+        Uses OneEuroFilter for adaptive smoothing:
+        - slow movement → heavy smoothing (no jitter)
+        - fast movement → light smoothing (responsive)
 
         Args:
             pointer: (x, y) in camera pixel coordinates.
@@ -38,17 +48,16 @@ class MovementController:
             [0, self.screen_height]
         )
 
-        # Smooth movement
-        curr_x = self.prev_x + (converted_x - self.prev_x) / self.smoothening
-        curr_y = self.prev_y + (converted_y - self.prev_y) / self.smoothening
+        # Adaptive smoothing
+        t = time.time()
+        smooth_x = self.filter_x(t, converted_x)
+        smooth_y = self.filter_y(t, converted_y)
 
         # Clamp
-        curr_x = max(0, min(curr_x, self.screen_width))
-        curr_y = max(0, min(curr_y, self.screen_height))
+        smooth_x = max(0, min(smooth_x, self.screen_width))
+        smooth_y = max(0, min(smooth_y, self.screen_height))
 
-        mouse.move(int(curr_x), int(curr_y))
-
-        self.prev_x, self.prev_y = curr_x, curr_y
+        mouse.move(int(smooth_x), int(smooth_y))
 
     def update(self, fingers, index_tip, middle_tip,
                distance, move_button, lock_button):

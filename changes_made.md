@@ -6,32 +6,32 @@ All changes made since the last pull on `refactor/controllers` branch.
 
 ## Bug Fixes
 
-### 🔴 Gesture Mutual Exclusion (`main.py`)
+###  Gesture Mutual Exclusion (`main.py`)
 - **Before:** All 6 controllers ran on every frame independently — drag, click, scroll, volume could all fire simultaneously
 - **After:** Controllers run through an **if/elif priority chain**. Only the active gesture's controllers execute
 - Added `active_mode` variable with **sticky mode** — movement mode persists when index bends for click
 
-### 🔴 DragController Had No Finger Guard (`drag_drop_controller.py`)
+###  DragController Had No Finger Guard (`drag_drop_controller.py`)
 - **Before:** Drag only checked thumb-index distance — fired anytime thumb was near index, regardless of gesture
 - **After:** Drag only runs when `active_mode == "drag"` (index up, middle down)
 - Added **hysteresis** — press at <20px, release at >50px (prevents mid-drag release from jitter)
 - Added `safe_release()` method for clean transitions between modes
 
-### 🔴 Click Fired During All Gestures (`mouse_click_controller.py`, `main.py`)
+###  Click Fired During All Gestures (`mouse_click_controller.py`, `main.py`)
 - **Before:** Click detection ran on every frame regardless of gesture mode
 - **After:** Click only fires in **lock mode** (index+middle spread apart ≥45px)
 - Added `sync_state()` method to prevent phantom clicks on mode switch
 
-### 🔴 Drag Stayed Pressed When Hand Left Camera (`main.py`)
+###  Drag Stayed Pressed When Hand Left Camera (`main.py`)
 - **Before:** If hand left the frame during drag, `mouse.release()` never ran — mouse stayed pressed forever
 - **After:** `else` branch on hand detection calls `drag.safe_release()` and resets mode to idle
 
-### 🔴 Screenshot Never Triggered (`screenshot_controller.py`)
+###  Screenshot Never Triggered (`screenshot_controller.py`)
 - **Before:** `is_fist` required `[1,0,0,0,0]` and `is_open` required `[0,1,1,1,1]` — didn't match natural hand poses
 - **After:** Both now **ignore thumb** — fist = all 4 fingers down, open = all 4 fingers up
 - Added **frame-count debounce** (3 frames) — prevents accidental triggers from brief poses
 
-### 🟡 Volume/Scroll Fired During Screenshot Gesture (`main.py`)
+###  Volume/Scroll Fired During Screenshot Gesture (`main.py`)
 - **Before:** Open palm step `[1,1,1,1,1]` triggered volume controller during screenshot sequence
 - **After:** Volume and scroll are **skipped** when screenshot state machine is active (not IDLE)
 

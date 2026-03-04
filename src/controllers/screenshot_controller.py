@@ -25,7 +25,7 @@ class ScreenshotController:
         self.fist_frames = 0
         self.open_frames = 0
 
-        self.screenshot_dir = os.path.join(os.path.expanduser("~"), "Pictures", "Screenshots")
+        self.screenshot_dir = os.path.join(os.path.expanduser("~"), "OneDrive", "Pictures", "Screenshots")
         os.makedirs(self.screenshot_dir, exist_ok=True)
 
     def is_fist(self, fingers):

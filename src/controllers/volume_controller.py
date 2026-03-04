@@ -8,14 +8,14 @@ class VolumeController:
         self.prev_angle = None
         self.rotation_accumulator = 0
 
-        # self.step_angle = config.KNOB_THRESHOLD      # degrees per volume step
-        self.step_angle = 10.0     # degrees per volume step
-        self.cooldown = config.KNOB_COOLDOWN         # small delay safety
+        self.step_angle = config.KNOB_STEP_ANGLE
+        self.cooldown = config.KNOB_COOLDOWN
         self.last_time = 0
 
         self.volume_manager = volume_manager
 
     def update(self, fingers, angle, buttons):
+        vol_event = None
 
         # ✋ All fingers UP (true knob mode)
         if fingers == [1, 1, 1, 1, 1]:
@@ -44,6 +44,7 @@ class VolumeController:
                         buttons[9].set_active()
                         self.rotation_accumulator -= self.step_angle
                         self.last_time = now
+                        vol_event = "Volume Up"
 
                     # Rotate Left → Volume Down
                     while self.rotation_accumulator <= -self.step_angle:
@@ -51,6 +52,7 @@ class VolumeController:
                         buttons[10].set_active()
                         self.rotation_accumulator += self.step_angle
                         self.last_time = now
+                        vol_event = "Volume Down"
 
             self.prev_angle = angle
 
@@ -58,3 +60,5 @@ class VolumeController:
             # Reset when leaving knob mode
             self.prev_angle = None
             self.rotation_accumulator = 0
+
+        return vol_event

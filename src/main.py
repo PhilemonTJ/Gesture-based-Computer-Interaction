@@ -1,10 +1,12 @@
 import cv2
 import numpy as np
 import pyautogui
+import time
 
 from utils.hand_detector import HandDetector
 from utils.button import TextButton
 from utils.volume_manager import VolumeManager
+from utils.roi_tracker import RoiTracker
 
 from core.config import Config
 from core.camera_manager import CameraManager
@@ -39,11 +41,12 @@ def main():
     # ================= CONTROLLERS ================= #
 
     movement = MovementController(config, rect_bounds, (screen_width, screen_height))
-    click = ClickController()
-    scroll = ScrollController()
-    drag = DragController()
+    click = ClickController(config)
+    scroll = ScrollController(config)
+    drag = DragController(config)
     volume = VolumeController(config, volume_manager)
     screenshot = ScreenshotController(config)
+    roi = RoiTracker(margin=config.ROI_MARGIN, max_lost_frames=config.ROI_MAX_LOST)
 
     # ================= BUTTONS ================= #
 
@@ -71,6 +74,9 @@ def main():
 
     # ================= MAIN LOOP ================= #
 
+    active_mode = "idle"  # sticky gesture mode tracker
+    prev_time = 0           # for FPS counter
+
     try:
         while True:
 
@@ -80,7 +86,10 @@ def main():
                 break
 
             img = cv2.flip(img, 1)
-            hands, img = detector.findHands(img, flipType=False)
+
+            # ── ROI: crop to hand region for faster detection ──
+            roi_frame, offset_x, offset_y = roi.get_frame_region(img)
+            hands, _ = detector.findHands(roi_frame, flipType=False)
 
             reset_buttons()
 
@@ -91,7 +100,17 @@ def main():
 
             if hands:
 
+                # Offset landmarks from crop coords → full-frame coords
                 lmlist = hands[0]["lmList"]
+                if offset_x != 0 or offset_y != 0:
+                    lmlist = [[lm[0] + offset_x, lm[1] + offset_y] + lm[2:]
+                              for lm in lmlist]
+                    hands[0]["lmList"] = lmlist
+
+                # Update ROI for next frame
+                frame_h, frame_w = img.shape[:2]
+                roi.update_from_landmarks(lmlist, frame_w, frame_h)
+
                 fingers = detector.fingersUp(hands[0])
 
                 thumb_tip = (lmlist[4][0], lmlist[4][1])
@@ -101,43 +120,108 @@ def main():
 
                 cv2.circle(img, index_tip, 10, (0, 255, 0), cv2.FILLED)
 
-                # ================= SCREENSHOT ================= #
+                # ===== SCREENSHOT (always — multi-frame state machine) ===== #
                 img = screenshot.update(fingers, img, buttons[7])
 
-                # ================= VOLUME ================= #
-                middle_mcp = (lmlist[9][0], lmlist[9][1])
-                angle = detector.finger_angle(middle_tip, middle_mcp)
+                # Skip volume/scroll when screenshot sequence is active
+                # (prevents accidental volume change during open-palm step)
+                if screenshot.state == screenshot.IDLE:
+                    # ===== VOLUME (only acts on [1,1,1,1,1]) ===== #
+                    middle_mcp = (lmlist[9][0], lmlist[9][1])
+                    angle = detector.finger_angle(middle_tip, middle_mcp)
+                    volume.update(fingers, angle, buttons)
 
-                volume.update(fingers, angle, buttons)
+                    # ===== SCROLL (only acts on [1,1,1,0,0]) ===== #
+                    scroll_dist, _, _ = detector.findDistance(index_tip, middle_tip)
+                    scroll.update(fingers, index_tip, buttons, finger_distance=scroll_dist)
 
-                # ================= DRAG ================= #
-                drag_length, _, _ = detector.findDistance(
-                    thumb_tip, index_tip, img)
+                # ===== GESTURE MODE (sticky — survives finger flicker) ===== #
 
-                dragging = drag.update(drag_length, buttons[8])
+                # STICKY DRAG: if actively dragging, STAY in drag mode
+                # regardless of finger flicker (only DragController decides
+                # when to release based on thumb-index distance).
+                if drag.dragging:
+                    active_mode = "drag"
 
-                # ================= MOVEMENT ================= #
-                # Distance between index & middle
-                move_length, _, _ = detector.findDistance(
-                    index_tip, middle_tip)
+                elif fingers == [1, 1, 1, 1, 1]:
+                    active_mode = "volume"
 
-                movement.update(
-                    fingers,
-                    index_tip,
-                    middle_tip,
-                    move_length,
-                    buttons[0],   # Mouse Moving
-                    buttons[1]    # Mouse Lock
-                )
+                elif (fingers[0] == 1 and fingers[1] == 1 and fingers[2] == 1
+                      and fingers[3] == 0 and fingers[4] == 0):
+                    active_mode = "scroll"
 
-                # ================= CLICK ================= #
-                click_length, _, _ = detector.findDistance(
-                    index_tip, middle_tip, img)
+                elif (fingers[1] == 1 and fingers[2] == 1
+                      and fingers[0] == 0
+                      and fingers[3] == 0 and fingers[4] == 0):
+                    active_mode = "move"
 
-                click.update(lmlist, buttons)
+                elif (active_mode == "move"
+                      and fingers[2] == 1
+                      and fingers[3] == 0 and fingers[4] == 0):
+                    # STICKY MOVE: stay in move while middle is up.
+                    # Index may be bending for click — don't leave move mode.
+                    pass
 
-                # ================= SCROLL ================= #
-                scroll.update(fingers, index_tip, buttons)
+                elif (fingers[1] == 1 and fingers[2] == 0
+                      and fingers[3] == 0 and fingers[4] == 0):
+                    active_mode = "drag"
+
+                else:
+                    active_mode = "idle"
+
+                # ===== DISPATCH BASED ON MODE ===== #
+                if active_mode == "move":
+                    move_length, _, _ = detector.findDistance(
+                        index_tip, middle_tip)
+
+                    movement.update(
+                        fingers,
+                        index_tip,
+                        middle_tip,
+                        move_length,
+                        buttons[0],   # Mouse Moving
+                        buttons[1]    # Mouse Lock
+                    )
+
+                    # Click only in LOCK mode (fingers spread apart)
+                    if move_length >= movement.join_threshold:
+                        click.update(lmlist, buttons)
+                    else:
+                        click.sync_state(lmlist)  # keep edge-trigger in sync
+                    drag.safe_release(buttons[8])
+
+                elif active_mode == "drag":
+                    drag_length, _, _ = detector.findDistance(
+                        thumb_tip, index_tip, img)
+
+                    drag.update(drag_length, buttons[8])
+
+                    if drag.dragging:
+                        movement.move_cursor_to(index_tip)
+
+                else:
+                    drag.safe_release(buttons[8])
+
+                # Debug overlay: finger state + mode (red text)
+                cv2.putText(img, f"Fingers: {fingers}", (10, 20),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+                cv2.putText(img, f"Mode: {active_mode}", (10, 45),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+
+            else:
+                # ── HAND LOST — cleanup ──
+                drag.safe_release(buttons[8])
+                active_mode = "idle"
+                roi.mark_lost()
+
+            # ── Draw ROI debug (green rectangle) ──
+            roi.draw_roi(img)
+            # ================= FPS COUNTER ================= #
+            curr_time = time.time()
+            fps = int(1 / (curr_time - prev_time)) if prev_time else 0
+            prev_time = curr_time
+            cv2.putText(img, f"FPS: {fps}", (img.shape[1] - 120, 25),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
 
             # ================= DRAW BUTTONS ================= #
             for button in buttons:

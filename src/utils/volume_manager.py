@@ -13,7 +13,7 @@ class VolumeManager:
     VK_VOLUME_DOWN = 0xAE
     VK_VOLUME_MUTE = 0xAD
 
-    def __init__(self, step=10):
+    def __init__(self, step=2):
         self.step = step  # logical step, mapped to key presses
 
     def _press_key(self, key):

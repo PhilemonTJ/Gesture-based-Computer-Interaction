@@ -43,6 +43,10 @@ class GestureEngine:
             "frame": None,            # PIL Image for camera preview
             "fingers": [0, 0, 0, 0, 0],
         }
+        
+        # Override fields for brief click display
+        self._click_text = ""
+        self._click_text_until = 0.0
 
         # Gesture toggles (UI can turn individual gestures on/off)
         self.toggles = {
@@ -54,6 +58,22 @@ class GestureEngine:
             "volume": True,
             "screenshot": True,
         }
+
+        # Display options
+        self.show_landmarks = True
+
+        # ── Preload MediaPipe model in background ──
+        self._detector = None
+        self._preload_ready = threading.Event()
+        threading.Thread(target=self._preload, daemon=True).start()
+
+    def _preload(self):
+        """Preload the MediaPipe hand detector in the background."""
+        self._detector = HandDetector(detectionCon=0.9, maxHands=1)
+        # Warm up with a dummy frame so the first real inference is fast
+        dummy = np.zeros((480, 640, 3), dtype=np.uint8)
+        self._detector.findHands(dummy, draw=False)
+        self._preload_ready.set()
 
     def start(self):
         """Start the gesture loop in a background thread."""
@@ -88,10 +108,10 @@ class GestureEngine:
         """Main gesture recognition loop (runs in background thread)."""
         config = self.config
 
-        # Show CONNECTING while MediaPipe and camera load
-        self.state["status"] = "CONNECTING"
+        # Wait for preloaded model (usually already done by now)
+        self._preload_ready.wait()
+        detector = self._detector
 
-        detector = HandDetector(detectionCon=0.9, maxHands=1)
         camera = CameraManager(config)
 
         # Now connected — switch to ACTIVE
@@ -132,7 +152,7 @@ class GestureEngine:
 
                 # ROI crop
                 roi_frame, offset_x, offset_y = roi.get_frame_region(img)
-                hands, _ = detector.findHands(roi_frame, flipType=False)
+                hands, _ = detector.findHands(roi_frame, draw=self.show_landmarks, flipType=False)
 
                 if hands:
                     # Offset landmarks
@@ -154,11 +174,12 @@ class GestureEngine:
                     middle_tip = (lmlist[12][0], lmlist[12][1])
 
                     # Draw landmarks on full frame
-                    cv2.circle(img, index_tip, 10, (0, 255, 0), cv2.FILLED)
+                    if self.show_landmarks:
+                        cv2.circle(img, index_tip, 10, (0, 255, 0), cv2.FILLED)
 
-                    # Draw interaction rectangle
-                    cv2.rectangle(img, (rect_x1, rect_y1),
-                                  (rect_x2, rect_y2), (255, 0, 0), 2)
+                        # Draw interaction rectangle
+                        cv2.rectangle(img, (rect_x1, rect_y1),
+                                      (rect_x2, rect_y2), (255, 0, 0), 2)
 
                     if not self._paused:
                         # ===== SCREENSHOT =====
@@ -180,6 +201,8 @@ class GestureEngine:
                         # ===== GESTURE MODE (sticky) =====
                         if drag.dragging:
                             active_mode = "drag"
+                        elif screenshot.state != screenshot.IDLE:
+                            active_mode = "screenshot"
                         elif fingers == [1, 1, 1, 1, 1]:
                             active_mode = "volume"
                         elif (fingers[0] == 1 and fingers[1] == 1 and fingers[2] == 1
@@ -189,10 +212,12 @@ class GestureEngine:
                               and fingers[0] == 0
                               and fingers[3] == 0 and fingers[4] == 0):
                             active_mode = "move"
-                        elif (active_mode == "move"
-                              and fingers[2] == 1
-                              and fingers[3] == 0 and fingers[4] == 0):
-                            pass  # sticky move
+                        elif (active_mode in ("move", "mouse_lock")
+                              and (fingers[1] == 1 or fingers[2] == 1)):
+                            active_mode = "move"  # reset to move, may become mouse_lock below
+                        elif (fingers[1] == 1 and fingers[2] == 0
+                              and (fingers[3] == 1 or fingers[4] == 1)):
+                            active_mode = "move"  # Right click with ring/pinky up
                         elif (fingers[1] == 1 and fingers[2] == 0
                               and fingers[3] == 0 and fingers[4] == 0):
                             active_mode = "drag"
@@ -206,8 +231,12 @@ class GestureEngine:
                                             move_length, _DummyButton(), _DummyButton())
 
                             if move_length >= movement.join_threshold:
+                                active_mode = "mouse_lock"
                                 if self.toggles["left_click"]:
-                                    click.update(lmlist, [_DummyButton()] * 11)
+                                    click_evt = click.update(lmlist, [_DummyButton()] * 11)
+                                    if click_evt:
+                                        self._click_text = click_evt
+                                        self._click_text_until = time.time() + 0.8
                                 else:
                                     click.sync_state(lmlist)
                             else:
@@ -224,7 +253,14 @@ class GestureEngine:
                             drag.safe_release(_DummyButton())
 
                     # Update gesture name for UI
-                    self.state["gesture"] = _mode_display_name(active_mode)
+                    gesture_str = _mode_display_name(active_mode)
+                    
+                    if time.time() < self._click_text_until:
+                        gesture_str = self._click_text
+                    else:
+                        self._click_text = ""
+                        
+                    self.state["gesture"] = gesture_str
 
                 else:
                     # Hand lost
@@ -235,7 +271,8 @@ class GestureEngine:
                     self.state["gesture"] = "None"
 
                 # Draw ROI debug
-                roi.draw_roi(img)
+                if self.show_landmarks:
+                    roi.draw_roi(img)
 
                 # Convert frame for UI display
                 img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
@@ -264,8 +301,10 @@ def _mode_display_name(mode: str) -> str:
     names = {
         "idle": "None",
         "move": "Move Mouse",
+        "mouse_lock": "Mouse Lock",
         "drag": "Drag & Drop",
         "scroll": "Scroll",
         "volume": "Volume Control",
+        "screenshot": "Screenshot",
     }
     return names.get(mode, mode.title())

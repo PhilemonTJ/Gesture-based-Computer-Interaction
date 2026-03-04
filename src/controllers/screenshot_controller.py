@@ -11,7 +11,8 @@ class ScreenshotController:
 
     def __init__(self, config):
         self.IDLE = 0
-        self.OPEN = 1
+        self.FIST = 1
+        self.OPEN = 2
 
         self.state = self.IDLE
         self.timer = 0
@@ -71,9 +72,16 @@ class ScreenshotController:
         fist_held = self.fist_frames >= self.debounce
         open_held = self.open_frames >= self.debounce
 
-        # ── State machine: OPEN PALM → FIST = screenshot ──
+        # ── State machine: FIST → OPEN PALM → FIST = screenshot ──
         if self.state == self.IDLE:
-            if open_held:
+            if fist_held:
+                self.state = self.FIST
+                self.timer = current_time
+
+        elif self.state == self.FIST:
+            if current_time - self.timer > self.timeout:
+                self.state = self.IDLE
+            elif open_held:
                 self.state = self.OPEN
                 self.timer = current_time
 

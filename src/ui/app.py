@@ -22,7 +22,12 @@ class GestureApp(ctk.CTk):
         self.configure(fg_color=BLACK)
 
         # Set window icon
-        icon_path = Path(__file__).resolve().parent.parent.parent / "logo.ico"
+        import sys
+        if getattr(sys, "frozen", False):
+            icon_path = Path(sys._MEIPASS) / "logo.ico"
+        else:
+            icon_path = Path(__file__).resolve().parent.parent.parent / "logo.ico"
+
         if icon_path.exists():
             self.iconbitmap(str(icon_path))
 
@@ -233,7 +238,12 @@ class GestureApp(ctk.CTk):
         dialog.grab_set()
 
         # Set icon
-        icon_path = Path(__file__).resolve().parent.parent.parent / "logo.ico"
+        import sys
+        if getattr(sys, "frozen", False):
+            icon_path = Path(sys._MEIPASS) / "logo.ico"
+        else:
+            icon_path = Path(__file__).resolve().parent.parent.parent / "logo.ico"
+
         if icon_path.exists():
             dialog.after(200, lambda: dialog.iconbitmap(str(icon_path)))
 

@@ -25,7 +25,12 @@ class SettingsModal(ctk.CTkToplevel):
         self.grab_set()
 
         # Set window icon
-        icon_path = Path(__file__).resolve().parent.parent.parent / "logo.ico"
+        import sys
+        if getattr(sys, "frozen", False):
+            icon_path = Path(sys._MEIPASS) / "logo.ico"
+        else:
+            icon_path = Path(__file__).resolve().parent.parent.parent / "logo.ico"
+
         if icon_path.exists():
             self.after(200, lambda: self.iconbitmap(str(icon_path)))
 

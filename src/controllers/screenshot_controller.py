@@ -36,12 +36,14 @@ class ScreenshotController:
         return fingers[1] == 1 and fingers[2] == 1 and fingers[3] == 1 and fingers[4] == 1
 
     def _show_toast(self, filepath):
-        """Show a macOS notification."""
+        """Show a Linux notification."""
         try:
             import subprocess
             subprocess.run([
-                "osascript", "-e",
-                f'display notification "Saved to {os.path.basename(filepath)}" with title "Screenshot Captured"'
+                "notify-send", 
+                "Screenshot Captured", 
+                f"Saved to {os.path.basename(filepath)}", 
+                "-i", filepath
             ])
         except Exception:
             pass  # silently fail if toast can't be shown
@@ -89,7 +91,8 @@ class ScreenshotController:
                 screenshot = pyautogui.screenshot()
                 screenshot.save(filename)
                 import subprocess
-                subprocess.Popen(["afplay", "/System/Library/Sounds/Glass.aiff"])
+                # FreeDesktop standard camera shutter sound
+                subprocess.Popen(["paplay", "/usr/share/sounds/freedesktop/stereo/camera-shutter.oga"])
 
                 # Show toast notification in a separate thread (non-blocking)
                 threading.Thread(target=self._show_toast, args=(filename,), daemon=True).start()

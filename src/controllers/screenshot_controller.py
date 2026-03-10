@@ -2,7 +2,6 @@
 
 import time
 import pyautogui
-import winsound
 import os
 import threading
 
@@ -25,7 +24,7 @@ class ScreenshotController:
         self.fist_frames = 0
         self.open_frames = 0
 
-        self.screenshot_dir = os.path.join(os.path.expanduser("~"), "OneDrive", "Pictures", "Screenshots")
+        self.screenshot_dir = os.path.join(os.path.expanduser("~"), "Pictures", "Screenshots")
         os.makedirs(self.screenshot_dir, exist_ok=True)
 
     def is_fist(self, fingers):
@@ -37,17 +36,13 @@ class ScreenshotController:
         return fingers[1] == 1 and fingers[2] == 1 and fingers[3] == 1 and fingers[4] == 1
 
     def _show_toast(self, filepath):
-        """Show a Snipping Tool-like toast notification with screenshot preview."""
+        """Show a macOS notification."""
         try:
-            from win11toast import toast
-            abs_path = os.path.abspath(filepath)
-            toast(
-                "Screenshot Captured.",
-                f"Saved to {os.path.basename(filepath)}",
-                image=abs_path,
-                duration="short",
-                on_click=abs_path,   # clicking the toast opens the image
-            )
+            import subprocess
+            subprocess.run([
+                "osascript", "-e",
+                f'display notification "Saved to {os.path.basename(filepath)}" with title "Screenshot Captured"'
+            ])
         except Exception:
             pass  # silently fail if toast can't be shown
 
@@ -93,7 +88,8 @@ class ScreenshotController:
                 filename = os.path.join(self.screenshot_dir, f"screenshot_{int(time.time())}.png")
                 screenshot = pyautogui.screenshot()
                 screenshot.save(filename)
-                winsound.Beep(1200, 150)
+                import subprocess
+                subprocess.Popen(["afplay", "/System/Library/Sounds/Glass.aiff"])
 
                 # Show toast notification in a separate thread (non-blocking)
                 threading.Thread(target=self._show_toast, args=(filename,), daemon=True).start()

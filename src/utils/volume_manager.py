@@ -1,37 +1,24 @@
 # utils/volume_manager.py
-import ctypes
+import subprocess
 import time
 
 
 class VolumeManager:
     """
-    Robust Windows volume control using virtual key events.
-    No COM, no pycaw, no driver dependency.
+    macOS volume control using osascript.
     """
 
-    VK_VOLUME_UP = 0xAF
-    VK_VOLUME_DOWN = 0xAE
-    VK_VOLUME_MUTE = 0xAD
-
     def __init__(self, step=2):
-        self.step = step  # logical step, mapped to key presses
-
-    def _press_key(self, key):
-        ctypes.windll.user32.keybd_event(key, 0, 0, 0)
-        ctypes.windll.user32.keybd_event(key, 0, 2, 0)
+        self.step = step  # logical step
 
     def increase(self):
-        # Each press ≈ 2% on Windows
-        presses = max(1, self.step // 2)
-        for _ in range(presses):
-            self._press_key(self.VK_VOLUME_UP)
-            time.sleep(0.01)
+        # macOS volume is out of 100, increase relative to current volume
+        subprocess.run(["osascript", "-e", f"set volume output volume (output volume of (get volume settings) + {self.step})"])
+        time.sleep(0.01)
 
     def decrease(self):
-        presses = max(1, self.step // 2)
-        for _ in range(presses):
-            self._press_key(self.VK_VOLUME_DOWN)
-            time.sleep(0.01)
+        subprocess.run(["osascript", "-e", f"set volume output volume (output volume of (get volume settings) - {self.step})"])
+        time.sleep(0.01)
 
     def mute(self):
-        self._press_key(self.VK_VOLUME_MUTE)
+        subprocess.run(["osascript", "-e", "set volume with output muted"])

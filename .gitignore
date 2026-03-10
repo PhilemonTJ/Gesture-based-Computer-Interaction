@@ -14,3 +14,16 @@ Thumbs.db
 
 /screenshots
 brain/
+
+# PyInstaller Build Artifacts
+build/
+dist/
+Release_Builds/
+*.spec
+*_Setup.exe
+
+# macOS branch ignored files
+index.html
+index3.html
+installer_script.iss
+GestureX.spec
